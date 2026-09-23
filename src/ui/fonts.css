@@ -1,0 +1,38 @@
+/*
+  Fixel by MacPaw — SIL Open Font License 1.1 (public/fonts/OFL.txt).
+  Self-hosted: no requests to Google Fonts or any CDN.
+  Onest and JetBrains Mono come from @fontsource packages (imported in main.tsx).
+*/
+
+@font-face {
+  font-family: 'Fixel Text';
+  src: url('/fonts/FixelText-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fixel Text';
+  src: url('/fonts/FixelText-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Fixel Text';
+  src: url('/fonts/FixelText-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Display cut: only for big numbers and headings, always weight 600. */
+@font-face {
+  font-family: 'Fixel Display';
+  src: url('/fonts/FixelDisplay-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}

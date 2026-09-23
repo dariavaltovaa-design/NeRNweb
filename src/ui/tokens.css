@@ -1,0 +1,53 @@
+/*
+  NeRN design tokens. The only place where colours are defined.
+  Components use them through Tailwind classes (bg-bg, text-muted, …) and never hard-code colours.
+
+  Theme: follows the system by default; <html data-theme="light|dark"> forces one.
+*/
+
+:root {
+  color-scheme: light;
+
+  --bg: #f6f4ef; /* warm paper */
+  --surface: #ffffff;
+  --text: #17181d;
+  --muted: #6a6d77;
+  --accent: #d98a12;
+  --on-accent: #0b0c10; /* text on accent buttons, AA contrast in both themes */
+  --band: #2e9c86; /* usual range, "within your usual" */
+  --below: #6c5ce7; /* "below your usual" — instead of red */
+  --hairline: rgb(23 24 29 / 0.12);
+
+  /* Test screen: identical in every theme and at every time of day (colour affects reaction time). */
+  --stimulus-bg: #050507;
+  --stimulus: #ffb547;
+  --stimulus-muted: #8b8e99;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --bg: #0b0c10;
+    --surface: #15171e;
+    --text: #f1efe9;
+    --muted: #8b8e99;
+    --accent: #ffb547;
+    --band: #5fc4ae;
+    --below: #a395ff;
+    --hairline: rgb(241 239 233 / 0.12);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #0b0c10;
+  --surface: #15171e;
+  --text: #f1efe9;
+  --muted: #8b8e99;
+  --accent: #ffb547;
+  --band: #5fc4ae;
+  --below: #a395ff;
+  --hairline: rgb(241 239 233 / 0.12);
+}
