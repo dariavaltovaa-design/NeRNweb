@@ -46,7 +46,7 @@ const FAST: Partial<PvtConfig> = {
 };
 
 export function configFor(mode: TestMode): PvtConfig {
-  if (import.meta.env.VITE_FAST_TEST === '1') return { ...CONFIGS[mode], ...FAST };
+  if (import.meta.env.MODE === 'e2e') return { ...CONFIGS[mode], ...FAST };
   return CONFIGS[mode];
 }
 
