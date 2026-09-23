@@ -25,11 +25,13 @@ export interface Session {
   checkIn?: CheckIn;
   experimentId?: string;
   condition?: 'A' | 'B';
+  experimentDay?: number; // which day of the experiment's schedule this test belongs to
+  scrollPair?: { id: string; phase: 'before' | 'after' }; // «Ціна скролу»: quick tests in pairs
 }
 
 export interface Trial {
   isiMs: number; // planned pause before the stimulus
-  onsetTs: number; // performance.now() of the frame that showed it
+  onsetTs: number | null; // rAF timestamp of the frame that showed it; null if tapped before it
   responseTs: number | null; // event.timeStamp of pointerdown
   rtMs: number | null; // responseTs - onsetTs
   kind: 'valid' | 'lapse' | 'false_start' | 'miss';
@@ -63,6 +65,7 @@ export interface CheckIn {
   nightAlert?: boolean; // "there was an alert at night" — set by the person
   tags: string[]; // e.g. ['coffee', 'reels_before_bed']
   note?: string; // up to 140 characters, never analysed
+  conditionKept?: boolean; // "Did you keep the condition?" — false excludes the session from the experiment
 }
 
 export interface Experiment {
@@ -71,7 +74,11 @@ export interface Experiment {
   conditionA: string; // 'Телефон у спальні (як зазвичай)'
   conditionB: string; // 'Телефон за дверима'
   schedule: 'alternating' | 'blocks';
+  timing: 'evening' | 'morning'; // evening habits affect the next morning's test
+  seed: number; // fixes the A/B order and the bootstrap, so results never "jump"
+  templateId?: string; // library experiments: texts come from i18n in the current language
   startedAt: number;
+  startDate: string; // 'YYYY-MM-DD', day 0 of the schedule
   plannedDays: number; // 14 by default
   status: 'running' | 'done' | 'abandoned';
   source: 'library' | 'custom';

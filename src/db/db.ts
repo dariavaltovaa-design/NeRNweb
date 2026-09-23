@@ -1,10 +1,11 @@
 import Dexie, { type EntityTable } from 'dexie';
+import { DB_NAME } from './exists';
 import type { Experiment, Profile, Session } from './schema';
 
 // Nothing is written until the person confirms 18+ (SPEC «Приватність», rule 7).
 // Opening the database happens lazily, on the first read or write.
 
-export const db = new Dexie('nern') as Dexie & {
+export const db = new Dexie(DB_NAME) as Dexie & {
   profile: EntityTable<Profile, 'id'>;
   sessions: EntityTable<Session, 'id'>;
   experiments: EntityTable<Experiment, 'id'>;
