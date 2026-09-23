@@ -24,6 +24,13 @@ export function plural(locale: Locale, n: number, forms: PluralForms): string {
   return template.replace('{n}', new Intl.NumberFormat(locale).format(n));
 }
 
+/** fill('Умова {c}', { c: 'B' }) → 'Умова B' */
+export function fill(template: string, values: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (match, key: string) =>
+    key in values ? String(values[key]) : match,
+  );
+}
+
 /** First of uk/en in the browser's language list; English if neither is there. */
 export function detectLocale(languages: readonly string[]): Locale {
   for (const lang of languages) {

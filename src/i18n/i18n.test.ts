@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { uk } from './uk';
 import { en } from './en';
-import { detectLocale, isPluralForms, plural } from './format';
+import { detectLocale, fill, isPluralForms, plural } from './format';
 
 /** All leaf paths like "nav.today". Plural groups count as one leaf: uk needs few/many, en does not. */
 function leafPaths(tree: object, prefix = ''): string[] {
   return Object.entries(tree).flatMap(([key, value]: [string, unknown]) => {
     const path = prefix ? `${prefix}.${key}` : key;
-    if (typeof value === 'string' || isPluralForms(value)) return [path];
+    // Plural groups and lists (captions, steps) are one leaf: their length may differ by language.
+    if (typeof value === 'string' || isPluralForms(value) || Array.isArray(value)) return [path];
     return leafPaths(value as object, path);
   });
 }
@@ -55,6 +56,13 @@ describe('plural', () => {
     const enDays = { one: '{n} day', other: '{n} days' };
     expect(plural('en', 1, enDays)).toBe('1 day');
     expect(plural('en', 2, enDays)).toBe('2 days');
+  });
+});
+
+describe('fill', () => {
+  it('replaces named placeholders and leaves unknown ones', () => {
+    expect(fill('Умова {c}, день {n}', { c: 'B', n: 3 })).toBe('Умова B, день 3');
+    expect(fill('{x}', {})).toBe('{x}');
   });
 });
 
