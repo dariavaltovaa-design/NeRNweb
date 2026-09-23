@@ -2,18 +2,17 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router';
 
-// Onest: fallback if Fixel fails to load (Cyrillic + Latin only).
-// JetBrains Mono: the test counter, which shows only digits, so Latin is enough.
+// Cormorant: editorial headlines and the Form number (Cyrillic + Latin, light roman and italic).
+// JetBrains Mono: the test counter (digits only → Latin).
 // Browsers download these files only when a character actually needs them.
-import '@fontsource/onest/cyrillic-400.css';
-import '@fontsource/onest/cyrillic-500.css';
-import '@fontsource/onest/cyrillic-600.css';
-import '@fontsource/onest/latin-400.css';
-import '@fontsource/onest/latin-500.css';
-import '@fontsource/onest/latin-600.css';
+import '@fontsource/cormorant/cyrillic-300.css';
+import '@fontsource/cormorant/latin-300.css';
+import '@fontsource/cormorant/cyrillic-300-italic.css';
+import '@fontsource/cormorant/latin-300-italic.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import './index.css';
 
+import './app/install';
 import { router } from './app/router';
 import { I18nProvider } from './i18n/I18nProvider';
 

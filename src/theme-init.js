@@ -1,5 +1,5 @@
 // Runs before the first paint: applies the saved theme and language so the screen never flashes.
-// Kept as a separate file (not inline) because the Content-Security-Policy forbids inline scripts.
+// Inlined into index.html at build time; the CSP allows exactly this script by its SHA-256 hash.
 (function () {
   var root = document.documentElement;
   try {

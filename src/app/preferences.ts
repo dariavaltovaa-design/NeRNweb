@@ -5,6 +5,7 @@
 const KEYS = {
   locale: 'nern.locale',
   theme: 'nern.theme',
+  ringDay: 'nern.ringDay', // the day the Form ring last played its fill animation
 } as const;
 
 type PrefKey = keyof typeof KEYS;
