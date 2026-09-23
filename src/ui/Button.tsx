@@ -1,42 +1,71 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
+import { ArrowRight } from './icons';
 
-type Variant = 'primary' | 'secondary';
+type Variant = 'primary' | 'secondary' | 'quiet';
 
 const BASE =
-  'inline-flex min-h-12 items-center justify-center rounded-button px-5 text-16 font-medium ' +
-  'transition-opacity duration-160 ease-out active:opacity-75';
+  'group inline-flex min-h-12 items-center justify-center gap-3 rounded-button text-16 font-medium ' +
+  'transition-[opacity,background-color,color] duration-160 ease-out active:opacity-75 ' +
+  'disabled:pointer-events-none disabled:opacity-40';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-accent text-on-accent',
-  secondary: 'text-text ring-1 ring-hairline ring-inset',
+  primary: 'bg-cta text-on-cta',
+  secondary: 'text-text ring-1 ring-hairline ring-inset hover:bg-surface',
+  quiet:
+    'px-0 text-text underline decoration-hairline underline-offset-[6px] hover:decoration-text',
 };
 
-interface ButtonLinkProps {
-  to: string;
+interface CommonProps {
   variant?: Variant;
+  /** Adds an arrow that nudges right on hover — for "go somewhere" actions. */
+  arrow?: boolean;
+  wide?: boolean;
   children: ReactNode;
 }
 
-/** A link that looks like a button: used when pressing it opens another screen. */
-export function ButtonLink({ to, variant = 'primary', children }: ButtonLinkProps) {
+function Content({ arrow, children }: { arrow?: boolean; children: ReactNode }) {
   return (
-    <Link to={to} className={`${BASE} ${VARIANTS[variant]}`}>
-      {children}
+    <>
+      <span>{children}</span>
+      {arrow && (
+        <ArrowRight className="transition-transform duration-160 ease-out group-hover:translate-x-1" />
+      )}
+    </>
+  );
+}
+
+export function ButtonLink({
+  to,
+  variant = 'primary',
+  arrow,
+  wide,
+  children,
+}: CommonProps & { to: string }) {
+  return (
+    <Link to={to} className={`${BASE} ${VARIANTS[variant]} ${wide ? 'w-full' : ''}`}>
+      <Content arrow={arrow}>{children}</Content>
     </Link>
   );
 }
 
-interface ButtonProps {
-  onClick: () => void;
-  variant?: Variant;
-  children: ReactNode;
-}
-
-export function Button({ onClick, variant = 'primary', children }: ButtonProps) {
+export function Button({
+  onClick,
+  variant = 'primary',
+  arrow,
+  wide,
+  disabled,
+  type = 'button',
+  children,
+}: CommonProps & { onClick?: () => void; disabled?: boolean; type?: 'button' | 'submit' }) {
   return (
-    <button type="button" onClick={onClick} className={`${BASE} ${VARIANTS[variant]}`}>
-      {children}
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`${BASE} ${VARIANTS[variant]} ${wide ? 'w-full' : ''}`}
+    >
+      <Content arrow={arrow}>{children}</Content>
     </button>
   );
 }

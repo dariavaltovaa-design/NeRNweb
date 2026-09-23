@@ -1,53 +1,72 @@
 /*
-  NeRN design tokens. The only place where colours are defined.
-  Components use them through Tailwind classes (bg-bg, text-muted, …) and never hard-code colours.
+  NeRN design tokens — «нічна лабораторія»: чорнило, кістяно-білий папір, один теплий сигнал.
+  The only place where colours are defined. Components use them through Tailwind classes
+  (bg-bg, text-muted, …) and never hard-code colours.
 
   Theme: follows the system by default; <html data-theme="light|dark"> forces one.
+  .theme-light / .theme-dark flip a single section (landing uses this for black ↔ bone blocks).
 */
 
-:root {
+:root,
+.theme-light {
   color-scheme: light;
 
-  --bg: #f6f4ef; /* warm paper */
-  --surface: #ffffff;
-  --text: #17181d;
-  --muted: #6a6d77;
-  --accent: #d98a12;
-  --on-accent: #0b0c10; /* text on accent buttons, AA contrast in both themes */
-  --band: #2e9c86; /* usual range, "within your usual" */
-  --below: #6c5ce7; /* "below your usual" — instead of red */
-  --hairline: rgb(23 24 29 / 0.12);
-
-  /* Test screen: identical in every theme and at every time of day (colour affects reaction time). */
-  --stimulus-bg: #050507;
-  --stimulus: #ffb547;
-  --stimulus-muted: #8b8e99;
+  --bg: #eeeae2; /* bone paper */
+  --surface: #f7f4ee;
+  --text: #0f0f10; /* ink */
+  --muted: #625d55;
+  --hairline: rgb(15 15 16 / 0.14);
+  --accent: #9c4a06; /* signal, on paper: graphics and small text */
+  --cta: #0f0f10; /* primary button: ink on paper */
+  --on-cta: #eeeae2;
+  --band: #356a5b; /* usual range */
+  --below: #4a5a8c; /* "below your usual" — instead of red */
+  --tint-morning: rgb(214 138 40 / 0.09); /* Today background, 5–11 h */
+  --tint-evening: rgb(74 90 160 / 0.08); /* Today background, 18–5 h */
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
 
-    --bg: #0b0c10;
-    --surface: #15171e;
-    --text: #f1efe9;
-    --muted: #8b8e99;
+    --bg: #0b0b0c;
+    --surface: #151517;
+    --text: #eeeae2;
+    --muted: #8f8a82;
+    --hairline: rgb(238 234 226 / 0.13);
     --accent: #ffb547;
-    --band: #5fc4ae;
-    --below: #a395ff;
-    --hairline: rgb(241 239 233 / 0.12);
+    --cta: #ffb547;
+    --on-cta: #0b0b0c;
+    --band: #7fb8a5;
+    --below: #9eaad6;
+    --tint-morning: rgb(255 181 71 / 0.07);
+    --tint-evening: rgb(96 112 190 / 0.1);
   }
 }
 
-:root[data-theme='dark'] {
+:root[data-theme='dark'],
+.theme-dark {
   color-scheme: dark;
 
-  --bg: #0b0c10;
-  --surface: #15171e;
-  --text: #f1efe9;
-  --muted: #8b8e99;
-  --accent: #ffb547;
-  --band: #5fc4ae;
-  --below: #a395ff;
-  --hairline: rgb(241 239 233 / 0.12);
+  --bg: #0b0b0c; /* ink */
+  --surface: #151517;
+  --text: #eeeae2; /* bone */
+  --muted: #8f8a82;
+  --hairline: rgb(238 234 226 / 0.13);
+  --accent: #ffb547; /* the colour of the stimulus: attention itself */
+  --cta: #ffb547;
+  --on-cta: #0b0b0c;
+  --band: #7fb8a5;
+  --below: #9eaad6;
+  --tint-morning: rgb(255 181 71 / 0.07);
+  --tint-evening: rgb(96 112 190 / 0.1);
+}
+
+:root {
+  --scrim: rgb(5 5 7 / 0.6); /* behind dialogs */
+  /* Test screen: identical in every theme and at every time of day (colour affects reaction time). */
+  --stimulus-bg: #050507;
+  --stimulus: #ffb547;
+  --stimulus-muted: #8b8e99;
+  --stimulus-faint: rgb(139 142 153 / 0.22);
 }

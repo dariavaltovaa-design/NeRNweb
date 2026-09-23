@@ -1,7 +1,11 @@
 /*
   Fixel by MacPaw — SIL Open Font License 1.1 (public/fonts/OFL.txt).
   Self-hosted: no requests to Google Fonts or any CDN.
-  Onest and JetBrains Mono come from @fontsource packages (imported in main.tsx).
+  Subset to Latin + Cyrillic (≈30% lighter), all OpenType features kept:
+    python -m fontTools.subset <font>.woff2 --layout-features='*' --flavor=woff2       --unicodes="U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0400-045F,
+                  U+0490-0491,U+2000-206F,U+20AC,U+20B4,U+2116,U+2122,U+2190-2199,U+2212,U+2215,
+                  U+2248,U+2260,U+2264-2265,U+22EE"
+  Cormorant and JetBrains Mono come from @fontsource packages (imported in main.tsx).
 */
 
 @font-face {
