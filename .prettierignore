@@ -5,3 +5,4 @@ playwright-report
 package-lock.json
 SPEC.md
 public/fonts
+dist-e2e

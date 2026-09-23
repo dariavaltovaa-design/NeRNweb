@@ -10,3 +10,4 @@ blob-report/
 *.local
 .DS_Store
 desktop.ini
+dist-e2e/
