@@ -8,10 +8,18 @@ import {
   includedSessions,
   verdictFromSpeeds,
 } from './experiment';
-import { calibrationIds, evaluateForm } from './form';
+import { calibrationIds } from './form';
+import { wordFor } from './norms';
+import { streak, usualRt } from './personal';
+import {
+  addContribution,
+  emptyAggregate,
+  fasterThanPercent,
+  isValidContribution,
+  summarize,
+} from './pulse';
 import { quantile } from './quantile';
 import { averageChange, scrollPairs } from './scroll';
-import { pickCaption } from './caption';
 import { assessValidity, computeMetrics } from './session';
 
 const t = (kind: Trial['kind'], rtMs: number | null): Trial => ({
@@ -93,65 +101,106 @@ function history(speeds: number[], start = '2026-09-01', extra: Partial<Session>
   return speeds.map((s, i) => session(addDays(start, i), s, extra));
 }
 
-describe('Form', () => {
-  it('first 5 valid daily sessions are calibration', () => {
-    const list = history([3, 3, 3, 3, 3]);
-    expect(evaluateForm(list, list[2]!)).toEqual({ kind: 'calibration', done: 3, total: 5 });
-    expect(evaluateForm(list, list[4]!)).toEqual({ kind: 'calibration', done: 5, total: 5 });
-  });
-
-  it('invalid sessions do not count towards calibration or Form', () => {
-    const list = history([3, 3, 3]);
-    const broken = session('2026-09-04', 3, { validity: { ok: false, reasons: ['tab_hidden'] } });
-    expect(evaluateForm([...list, broken], broken)).toBeNull();
-  });
-
-  it('ceiling = 90th percentile after calibration; capped at 100 with a new peak', () => {
-    const list = history([2, 2, 2, 2, 2, 3.0, 3.2, 3.4, 3.6, 3.8]);
-    const result = evaluateForm(list, list[9]!);
-    expect(result).toMatchObject({ kind: 'form', value: 100, newPeak: true });
-    if (result?.kind === 'form') expect(result.ceiling).toBeCloseTo(3.72, 10);
-  });
-
-  it('usual range = IQR of Form; below it → "below"', () => {
-    const list = history([2, 2, 2, 2, 2, 3.0, 3.2, 3.4, 3.6, 3.8, 3.1]);
-    const result = evaluateForm(list, list[10]!);
-    // C = 3.7 → Form 84; forms [81, 84, 86, 92, 97, 100] → IQR 84.5…95.75 → 85…96
-    expect(result).toEqual({
-      kind: 'form',
-      value: 84,
-      newPeak: false,
-      range: { low: 85, high: 96 },
-      position: 'below',
-      ceiling: expect.closeTo(3.7, 10) as number,
-      poolSize: 6,
-    });
-  });
-
-  it('no usual range until 5 sessions after calibration', () => {
-    const list = history([2, 2, 2, 2, 2, 3, 3.1]);
-    const result = evaluateForm(list, list[6]!);
-    expect(result).toMatchObject({ kind: 'form', range: null, position: null });
-  });
-
-  it('only the last 60 days set the ceiling', () => {
-    const old = history([2, 2, 2, 2, 2, 9], '2026-01-01'); // a very high old session
-    const recent = history([3, 3.2], '2026-09-01');
-    const result = evaluateForm([...old, ...recent], recent[1]!);
-    expect(result).toMatchObject({ kind: 'form', value: 100 });
-  });
-
-  it('a new device starts a new calibration', () => {
+describe('warm-up sessions', () => {
+  it('the first 5 valid daily tests on each device are left out of experiments', () => {
     const list = history([3, 3, 3, 3, 3, 3]);
     const other = session('2026-09-10', 3, {
       device: { fingerprint: 'laptop', refreshHz: 120, inputType: 'mouse' },
     });
-    expect(evaluateForm([...list, other], other)).toEqual({
-      kind: 'calibration',
-      done: 1,
-      total: 5,
-    });
-    expect(calibrationIds([...list, other]).has(other.id)).toBe(true);
+    const ids = calibrationIds([...list, other]);
+    expect(ids.has(list[4]!.id)).toBe(true);
+    expect(ids.has(list[5]!.id)).toBe(false);
+    expect(ids.has(other.id)).toBe(true);
+  });
+});
+
+describe('result word (NeRN scale around the smartphone PVT mean 481 ± 170 ms)', () => {
+  it('maps mean RT to one word', () => {
+    expect(wordFor(300)).toBe('lightning'); // ≤ 311
+    expect(wordFor(350)).toBe('sharp'); // ≤ 396
+    expect(wordFor(450)).toBe('alert'); // ≤ 481
+    expect(wordFor(520)).toBe('drowsy'); // ≤ 566
+    expect(wordFor(700)).toBe('fog');
+  });
+});
+
+describe('pulse: anonymous average', () => {
+  it('adds only valid contributions and counts Ukraine separately', () => {
+    expect(isValidContribution({ hour: 8, meanRtMs: 320 })).toBe(true);
+    expect(isValidContribution({ hour: 24, meanRtMs: 320 })).toBe(false);
+    expect(isValidContribution({ hour: 8, meanRtMs: 50 })).toBe(false);
+    expect(isValidContribution({ hour: 8, meanRtMs: 320, id: 'x' })).toBe(true);
+
+    let agg = emptyAggregate();
+    agg = addContribution(agg, { hour: 8, meanRtMs: 300 }, true);
+    agg = addContribution(agg, { hour: 8, meanRtMs: 400 }, false);
+    expect(agg.all.n).toBe(2);
+    expect(agg.ua.n).toBe(1);
+    expect(agg.ua.hours[8]).toEqual({ n: 1, sum: 300 });
+  });
+
+  it('hides averages and percentiles until 20 results', () => {
+    let agg = emptyAggregate();
+    for (let i = 0; i < 19; i++) agg = addContribution(agg, { hour: 9, meanRtMs: 350 }, true);
+    expect(summarize(agg).ua.meanRtMs).toBeNull();
+    agg = addContribution(agg, { hour: 9, meanRtMs: 350 }, true);
+    expect(summarize(agg).ua.meanRtMs).toBe(350);
+    expect(summarize(agg).ua.hours[9]!.meanRtMs).toBe(350);
+  });
+
+  it('percentile: share of people slower than you', () => {
+    let agg = emptyAggregate();
+    for (let i = 0; i < 10; i++) agg = addContribution(agg, { hour: 9, meanRtMs: 300 }, true);
+    for (let i = 0; i < 30; i++) agg = addContribution(agg, { hour: 9, meanRtMs: 500 }, true);
+    const ua = summarize(agg).ua;
+    expect(fasterThanPercent(ua, 250)).toBe(100);
+    expect(fasterThanPercent(ua, 400)).toBe(75);
+    expect(fasterThanPercent(ua, 900)).toBe(0);
+  });
+});
+
+describe('personal context', () => {
+  it('usual level appears after 3 earlier tests; streak counts days in a row', () => {
+    const today = '2026-09-24';
+    const list = [
+      session('2026-09-21', 1000 / 400, {
+        metrics: {
+          medianRtMs: 400,
+          meanRtMs: 400,
+          meanSpeed: 2.5,
+          lapses: 0,
+          falseStarts: 0,
+          validTrials: 15,
+        },
+      }),
+      session('2026-09-22', 1000 / 300, {
+        metrics: {
+          medianRtMs: 300,
+          meanRtMs: 300,
+          meanSpeed: 3.3,
+          lapses: 0,
+          falseStarts: 0,
+          validTrials: 15,
+        },
+      }),
+    ];
+    expect(usualRt(list, today)).toBeNull();
+    list.push(
+      session('2026-09-23', 3, {
+        metrics: {
+          medianRtMs: 350,
+          meanRtMs: 350,
+          meanSpeed: 2.9,
+          lapses: 0,
+          falseStarts: 0,
+          validTrials: 15,
+        },
+      }),
+    );
+    expect(usualRt(list, today)).toBe(350);
+    expect(streak(list, today)).toBe(3); // today not tested yet: counts up to yesterday
+    list.push(session(today, 3));
+    expect(streak(list, today)).toBe(4);
   });
 });
 
@@ -274,21 +323,5 @@ describe('scroll cost', () => {
     expect(pairs[0]!.change).toBeCloseTo(-10, 10);
     expect(averageChange(pairs)).toBeCloseTo(-10, 10);
     expect(averageChange(pairs.slice(0, 4))).toBeNull();
-  });
-});
-
-describe('caption of the day', () => {
-  const templates = ['a', 'b', 'c', 'd'];
-
-  it('is stable for a date and never repeats the previous day', () => {
-    let date = '2026-09-01';
-    let previous = pickCaption(templates, addDays(date, -1));
-    for (let i = 0; i < 60; i++) {
-      const caption = pickCaption(templates, date);
-      expect(pickCaption(templates, date)).toBe(caption);
-      expect(caption).not.toBe(previous);
-      previous = caption;
-      date = addDays(date, 1);
-    }
   });
 });

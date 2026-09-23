@@ -52,6 +52,7 @@ export interface Validity {
 
 export interface SessionMetrics {
   medianRtMs: number;
+  meanRtMs?: number; // mean RT of real reactions (≥ 100 ms, misses excluded) — the number people see
   meanSpeed: number; // mean of 1000/RT over valid responses, unit: 1/s
   lapses: number; // RT >= 355 ms
   falseStarts: number; // response < 100 ms or before the stimulus

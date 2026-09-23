@@ -1,41 +1,69 @@
 import { expect, test, type Page } from '@playwright/test';
-import { onboard, takeTest, watch } from './helpers';
+import { firstTestAndSave, mockPulse, takeTest, watch } from './helpers';
 
-test('demo: 60-second test without saving, then a result', async ({ page }) => {
+test('landing → test → one word, nothing stored, one anonymous number sent', async ({ page }) => {
+  const posts = await mockPulse(page);
   const { errors, foreignRequests } = watch(page);
   await page.goto('/');
-  await page.getByRole('link', { name: 'Спробувати 60 секунд' }).first().click();
+  await page.getByRole('link', { name: 'Пройти тест · 60 с' }).first().click();
   await takeTest(page);
-  await expect(page.getByTestId('typical')).toBeVisible();
-  await expect(page.getByText('Це демо: результат ніде не збережено.')).toBeVisible();
+
+  await expect(page.getByTestId('word')).toHaveText(/Блискавка|Гостро|Бадьоро|Сонно|Туман/);
+  await expect(page.getByText('Середнє у дослідженні на смартфонах — 481 мс.')).toBeVisible();
+  await expect(page.getByText(/Середнє по Україні з’явиться після 20 результатів/)).toBeVisible();
+
   const stored = await page.evaluate(async () => (await indexedDB.databases()).map((d) => d.name));
   expect(stored).not.toContain('nern');
+  expect(posts).toHaveLength(1);
+  expect(Object.keys(posts[0] as object).sort()).toEqual(['hour', 'meanRtMs']);
   expect(errors).toEqual([]);
   expect(foreignRequests).toEqual([]);
 });
 
-test('first launch: 18+ → how it works → time → test → calibration 1/5', async ({ page }) => {
-  await onboard(page);
+test('with enough data the result compares with Ukraine at this hour', async ({ page }) => {
+  await mockPulse(page, { n: 40, ms: 380 });
+  await page.goto('/test');
   await takeTest(page);
-  await expect(page).toHaveURL(/\/today$/);
-  await expect(page.getByRole('img', { name: 'Калібрування: 1 з 5' })).toBeVisible();
+  await expect(page.getByText('По Україні о цій порі — 380 мс.')).toBeVisible();
+  await expect(page.getByText(/Ти швидше, ніж \d+% учасників з України\./)).toBeVisible();
 });
 
-test('daily session → check-in → history', async ({ page }) => {
-  await onboard(page);
+test('switching the average off sends nothing', async ({ page }) => {
+  const posts = await mockPulse(page);
+  await page.goto('/settings');
+  await page.getByText('Анонімне середнє по Україні', { exact: true }).click();
+  await expect(page.getByRole('switch', { name: 'Анонімне середнє по Україні' })).not.toBeChecked();
+  await page.goto('/test');
   await takeTest(page);
-  await expect(page).toHaveURL(/\/today$/);
+  await expect(page.getByTestId('word')).toBeVisible();
+  expect(posts).toHaveLength(0);
+});
+
+test('a challenge link: banner → test → who is faster', async ({ page }) => {
+  await mockPulse(page);
+  await page.goto('/?vs=312&from=Даша');
+  await expect(page.getByText('Даша реагує за 312 мс. Зможеш швидше?')).toBeVisible();
+  await page.getByRole('link', { name: 'Прийняти виклик' }).first().click();
+  await takeTest(page);
+  await expect(page.getByText(/^Виклик від Даша: /)).toBeVisible();
+});
+
+test('keep results with one checkbox → Today → check-in → History', async ({ page }) => {
+  await mockPulse(page);
+  await firstTestAndSave(page);
+  await expect(page.getByTestId('today-result')).toBeVisible();
 
   await page.getByRole('button', { name: 'Сон: Більше' }).click();
   await page.getByRole('button', { name: 'Кава' }).click();
-  await expect(page.getByText('Збережено на цьому пристрої')).toBeVisible();
+  await expect(page.getByText('Збережено на цьому телефоні').first()).toBeVisible();
 
   await page.getByRole('link', { name: 'Історія' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Історія');
-  await expect(page.getByText('калібрування').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Розгорнути графік' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
 });
 
-/** Adds past valid daily sessions straight into IndexedDB, on the same device as the real one. */
+/** Adds past valid daily tests straight into IndexedDB, on the same device as the real one. */
 async function seedHistory(page: Page, days: number) {
   await page.evaluate(async (count) => {
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -61,9 +89,10 @@ async function seedHistory(page: Page, days: number) {
         localHour: 8,
         validity: { ok: true, reasons: [] },
         metrics: {
-          medianRtMs: 280,
-          meanSpeed: 3 + (i % 5) * 0.1,
-          lapses: 1,
+          medianRtMs: 300,
+          meanRtMs: 300,
+          meanSpeed: 3.33,
+          lapses: 0,
           falseStarts: 0,
           validTrials: 20,
         },
@@ -75,23 +104,18 @@ async function seedHistory(page: Page, days: number) {
   }, days);
 }
 
-test('after calibration the Form appears with the usual range', async ({ page }) => {
-  await onboard(page);
-  await takeTest(page);
-  await seedHistory(page, 12);
+test('after 3 tests on other days: streak and your usual level', async ({ page }) => {
+  await mockPulse(page);
+  await firstTestAndSave(page);
+  await seedHistory(page, 3);
   await page.reload();
-  await expect(page.getByRole('img', { name: /^Форма \d+ зі 100/ })).toBeVisible();
-  await expect(page.getByTestId('position')).toBeVisible();
-
-  await page.getByRole('link', { name: 'Історія' }).click();
-  await page.getByRole('button', { name: 'Розгорнути графік' }).click();
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await expect(page.getByRole('dialog').getByText('Форма за 60 днів')).toBeVisible();
+  await expect(page.getByText('4 дні')).toBeVisible();
+  await expect(page.getByText(/^300\s*мс$/)).toBeVisible();
 });
 
 test('starting an experiment shows the plan and the verdict status', async ({ page }) => {
-  await onboard(page);
-  await takeTest(page);
+  await mockPulse(page);
+  await firstTestAndSave(page);
   await page.getByRole('link', { name: 'Експерименти' }).click();
   await page.getByRole('button', { name: /Телефон поза спальнею/ }).click();
   await page.getByRole('button', { name: 'Почати експеримент' }).click();
@@ -106,8 +130,8 @@ test('starting an experiment shows the plan and the verdict status', async ({ pa
 });
 
 test('export JSON and CSV, then delete everything', async ({ page }) => {
-  await onboard(page);
-  await takeTest(page);
+  await mockPulse(page);
+  await firstTestAndSave(page);
   await page.goto('/privacy');
 
   const [json] = await Promise.all([
@@ -118,7 +142,7 @@ test('export JSON and CSV, then delete everything', async ({ page }) => {
 
   const [csv] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Експортувати сеанси · CSV' }).click(),
+    page.getByRole('button', { name: 'Експортувати тести · CSV' }).click(),
   ]);
   expect(csv.suggestedFilename()).toMatch(/\.csv$/);
 

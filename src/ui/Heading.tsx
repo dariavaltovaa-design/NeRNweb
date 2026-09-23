@@ -1,64 +1,64 @@
 import { useEffect, type ReactNode } from 'react';
 
 export interface EditorialTitle {
-  caps: string;
-  italic: string;
+  text: string;
+  accent: string;
 }
 
-/** Small uppercase label above a title or a value. */
+/** Small uppercase label above a title or a value. No digits here: З and 3 look alike. */
 export function Kicker({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <p className={`kicker text-muted ${className}`}>{children}</p>;
 }
 
-/** Light serif capitals with an italic lowercase accent: «ТВОЯ увага.» */
+/**
+ * Light serif capitals; the accent part sits on its own line in the accent colour.
+ * Never italic: Cyrillic italics read like Latin letters in an interface.
+ */
 export function Editorial({
   title,
   className = '',
+  animate = false,
 }: {
   title: EditorialTitle;
   className?: string;
+  /** Lines slide up from behind a mask, one after another (landing headline). */
+  animate?: boolean;
 }) {
+  const line = (text: string, index: number, accent: boolean) => (
+    <span className="block overflow-hidden pb-[0.06em]">
+      <span
+        className={`block ${accent ? 'text-accent' : ''} ${animate ? 'animate-line' : ''}`}
+        style={
+          animate ? ({ '--line-delay': `${index * 120}ms` } as React.CSSProperties) : undefined
+        }
+      >
+        {text}
+      </span>
+    </span>
+  );
   return (
-    <span className={className}>
-      <span className="serif-caps">{title.caps}</span>{' '}
-      <span className="serif-italic">{title.italic}</span>
+    <span className={`serif-caps block ${className}`}>
+      {line(title.text, 0, false)}
+      {line(title.accent, 1, true)}
     </span>
   );
 }
 
-/**
- * Screen header: kicker + serif title. Also sets the browser tab title,
- * so screen readers announce the page.
- */
-export function PageHeader({
-  kicker,
-  title,
-  documentTitle,
-}: {
-  kicker?: ReactNode;
-  title: string | EditorialTitle;
-  documentTitle?: string;
-}) {
-  const plain = typeof title === 'string' ? title : `${title.caps} ${title.italic}`;
+/** Screen header: kicker + title. Also sets the browser tab title for screen readers. */
+export function PageHeader({ kicker, title }: { kicker?: ReactNode; title: string }) {
   useEffect(() => {
-    document.title = `${documentTitle ?? plain} · NeRN`;
-  }, [documentTitle, plain]);
+    document.title = `${title} · NeRN`;
+  }, [title]);
 
   return (
     <header className="animate-rise">
       {kicker && <Kicker className="mb-3">{kicker}</Kicker>}
-      <h1 className="text-40 tracking-[-0.01em] text-balance">
-        {typeof title === 'string' ? (
-          <span className="serif-caps">{title}</span>
-        ) : (
-          <Editorial title={title} />
-        )}
-      </h1>
+      <h1 className="serif-caps text-40 tracking-[-0.01em] text-balance">{title}</h1>
     </header>
   );
 }
 
-/** A labelled value in small print: "ТИПОВА РЕАКЦІЯ / 284 мс". */
+/** A labelled value in small print: "СЕРІЯ / 3 дні". */
 export function Stat({ label, value, unit }: { label: string; value: ReactNode; unit?: string }) {
   return (
     <div>

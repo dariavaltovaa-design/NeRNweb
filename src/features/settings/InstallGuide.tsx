@@ -32,7 +32,7 @@ export function InstallGuide() {
       <ol className="flex flex-col gap-3">
         {(platform === 'ios' ? m.install.iosSteps : m.install.androidSteps).map((step, i) => (
           <li key={step} className="flex gap-4 text-16">
-            <span className="serif-italic w-5 shrink-0 text-20 leading-6 text-accent">{i + 1}</span>
+            <span className="w-5 shrink-0 font-display font-semibold text-accent">{i + 1}</span>
             {step}
           </li>
         ))}

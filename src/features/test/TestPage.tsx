@@ -1,12 +1,15 @@
 // SPEC «Екран 3 — Тест». Always the same, whatever the theme or time of day: near-black,
-// an amber monospaced counter, a faint progress hairline. No buttons, icons or navigation.
-// Exit only by swiping down or the system back, with a confirmation.
+// an amber counter, a faint progress hairline. No buttons, icons or navigation.
+// Exit only by swiping down, Esc or the system back, with a confirmation.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useBlocker, useNavigate, useSearchParams } from 'react-router';
+import { Navigate, useBlocker, useNavigate, useSearchParams } from 'react-router';
+import { CONSENT_VERSION } from '../../app/data';
+import { contribute } from '../../app/pulse';
+import { readPref, writePref } from '../../app/preferences';
 import { currentTheme, paintStatusBar } from '../../app/theme';
 import { deviceInfo, normaliseRefreshHz } from '../../db/device';
-import { activeExperiment, addSession, allSessions, getProfile } from '../../db/repo';
+import { useProfile } from '../../db/exists';
 import type { DeviceInfo, Session, SessionMetrics, Validity } from '../../db/schema';
 import { configFor, plannedDurationMs, PRACTICE_STIMULI, type TestMode } from '../../engine/config';
 import { browserClock, measureFrameInterval, PvtEngine, type EngineResult } from '../../engine/pvt';
@@ -15,36 +18,43 @@ import { fill } from '../../i18n/format';
 import { useI18n } from '../../i18n/I18nProvider';
 import { localDateOf } from '../../stats/dates';
 import { conditionForTest } from '../../stats/experiment';
+import { streak, usualRt } from '../../stats/personal';
 import { assessValidity, computeMetrics } from '../../stats/session';
 import { Button } from '../../ui/Button';
 import { Dialog } from '../../ui/Dialog';
-import { ResultView } from './ResultView';
+import { readChallenge } from './challenge';
+import { ResultScreen } from './ResultScreen';
 
 type Stage = 'loading' | 'ready' | 'countdown' | 'running' | 'saving' | 'result';
 
 const SWIPE_EXIT_PX = 90;
 const COUNTDOWN_R = 44;
 const COUNTDOWN_C = 2 * Math.PI * COUNTDOWN_R;
+const DIGIT_CELLS = 4;
 
-function parseMode(value: string | null): TestMode {
-  return value === 'daily' || value === 'quick' ? value : 'demo';
+interface Outcome {
+  validity: Validity;
+  metrics?: SessionMetrics;
+  session: Session;
+  saved: boolean;
+  personal: { usualRt: number | null; streak: number } | null;
 }
 
 export function TestPage() {
   const { m } = useI18n();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const mode = parseMode(params.get('mode'));
+  const profile = useProfile();
+  const challenge = readChallenge(params);
   const pairId = params.get('pair');
   const pairPhase = params.get('phase') === 'after' ? 'after' : 'before';
+  // With a profile the test is saved (daily); without one it is shown and kept only if they agree.
+  const mode: TestMode = pairId ? 'quick' : profile ? 'daily' : 'demo';
 
-  const [stage, setStage] = useState<Stage>('loading');
+  const [stage, setStage] = useState<Stage>('ready');
   const [count, setCount] = useState(3);
-  const [practice, setPractice] = useState(0);
   const [exitOpen, setExitOpen] = useState(false);
-  const [result, setResult] = useState<{ validity: Validity; metrics?: SessionMetrics } | null>(
-    null,
-  );
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
 
   const engineRef = useRef<PvtEngine | null>(null);
   const counterRef = useRef<HTMLSpanElement>(null);
@@ -65,35 +75,13 @@ export function TestPage() {
     blockerRef.current = blocker;
   });
 
-  // ── Who is testing: daily and quick tests need the 18+ profile ──────────────
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      if (mode === 'demo') {
-        setStage('ready');
-        return;
-      }
-      const profile = await getProfile();
-      if (!profile) {
-        navigate('/onboarding', { replace: true });
-        return;
-      }
-      // Rule 9: the very first session in life starts with 3 practice stimuli.
-      const first = (await allSessions()).length === 0;
-      if (!cancelled) {
-        setPractice(first ? PRACTICE_STIMULI : 0);
-        setStage('ready');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [mode, navigate]);
+  // Ready as soon as we know whether there is a profile (a few ms). Scroll-cost tests need one.
+  const shownStage: Stage = profile === undefined ? 'loading' : stage;
+  const needsProfile = pairId !== null && profile === null;
 
   // The status bar matches the test screen while it is on.
   useEffect(() => {
-    const onTestScreen = stage !== 'result';
-    paintStatusBar(currentTheme(), onTestScreen ? 'stimulus' : undefined);
+    paintStatusBar(currentTheme(), stage === 'result' ? undefined : 'stimulus');
     return () => paintStatusBar(currentTheme());
   }, [stage]);
 
@@ -107,69 +95,99 @@ export function TestPage() {
     };
   }, []);
 
-  // ── Saving the finished session ─────────────────────────────────────────────
+  // ── The finished test ───────────────────────────────────────────────────────
   const handleEnd = useCallback(
     async (engineResult: EngineResult) => {
       setStage('saving');
       void wakeLockRef.current?.release().catch(() => undefined);
       wakeLockRef.current = null;
+      writePref('warmedUp', '1');
 
-      const config = configFor(mode);
       const validity = assessValidity(
         engineResult.trials,
-        config.minValidResponses,
+        configFor(mode).minValidResponses,
         engineResult.flags,
       );
       const metrics = computeMetrics(engineResult.trials);
-
-      if (mode === 'demo') {
-        setResult({ validity, metrics });
-        if (blockerRef.current.state === 'blocked') blockerRef.current.proceed();
-        else setStage('result');
-        return;
-      }
-
       const startedAt = startedAtRef.current;
       const localDate = localDateOf(startedAt);
+      const hour = new Date(startedAt).getHours();
+
       const session: Session = {
         id: crypto.randomUUID(),
         startedAt,
         localDate,
-        localHour: new Date(startedAt).getHours(),
-        mode,
+        localHour: hour,
+        mode: mode === 'demo' ? 'daily' : mode,
         durationMs: plannedDurationMs(mode),
         trials: engineResult.trials,
         device: deviceInfo(normaliseRefreshHz(1000 / frameMsRef.current), inputTypeRef.current),
         validity,
-        // Metrics only for valid sessions: an interrupted test never enters the Form.
+        // Metrics only for valid sessions: an interrupted test never enters the history.
         ...(validity.ok && metrics ? { metrics } : {}),
       };
 
-      if (mode === 'daily') {
-        const experiment = await activeExperiment();
-        const tagged = experiment ? conditionForTest(experiment, localDate) : null;
-        if (experiment && tagged) {
-          session.experimentId = experiment.id;
-          session.condition = tagged.condition;
-          session.experimentDay = tagged.day;
+      if (validity.ok && metrics?.meanRtMs && mode !== 'quick') {
+        void contribute(hour, metrics.meanRtMs);
+      }
+
+      let saved = false;
+      let personal: Outcome['personal'] = null;
+      if (mode === 'daily' || mode === 'quick') {
+        const repo = await import('../../db/repo');
+        if (mode === 'daily') {
+          const experiment = await repo.activeExperiment();
+          const tagged = experiment ? conditionForTest(experiment, localDate) : null;
+          if (experiment && tagged) {
+            session.experimentId = experiment.id;
+            session.condition = tagged.condition;
+            session.experimentDay = tagged.day;
+          }
+        }
+        if (mode === 'quick' && pairId) session.scrollPair = { id: pairId, phase: pairPhase };
+        await repo.addSession(session);
+        saved = true;
+        if (mode === 'daily') {
+          const all = await repo.allSessions();
+          personal = { usualRt: usualRt(all, localDate), streak: streak(all, localDate) };
         }
       }
-      if (mode === 'quick' && pairId) session.scrollPair = { id: pairId, phase: pairPhase };
-
-      await addSession(session);
 
       if (blockerRef.current.state === 'blocked') {
         blockerRef.current.proceed();
         return;
       }
-      navigate(mode === 'daily' ? '/today' : '/scroll', { replace: true });
+      if (mode === 'quick') {
+        navigate('/scroll', { replace: true });
+        return;
+      }
+      setOutcome({ validity, ...(metrics ? { metrics } : {}), session, saved, personal });
+      setStage('result');
     },
     [mode, navigate, pairId, pairPhase],
   );
 
+  // Someone without a profile agrees at the result screen: create it and keep this test.
+  async function saveFirstResult() {
+    if (!outcome) return;
+    const repo = await import('../../db/repo');
+    await repo.saveProfile({
+      id: 'me',
+      createdAt: Date.now(),
+      locale: document.documentElement.lang === 'en' ? 'en' : 'uk',
+      ageConfirmed18: true,
+      consentVersion: CONSENT_VERSION,
+      preferredWindow: {
+        startHour: (outcome.session.localHour + 22) % 24,
+        endHour: (outcome.session.localHour + 2) % 24,
+      },
+    });
+    await repo.addSession(outcome.session);
+  }
+
   // ── Start: countdown 3–2–1 while measuring the frame rate (rule 8) ──────────
   function begin(pointerType: string) {
-    if (stage !== 'ready') return;
+    if (shownStage !== 'ready') return;
     inputTypeRef.current = pointerType === 'mouse' || pointerType === 'pen' ? pointerType : 'touch';
     setStage('countdown');
     setCount(3);
@@ -193,23 +211,30 @@ export function TestPage() {
     const practiceLabel = practiceRef.current;
     if (!counter || !message || !bar || !practiceLabel) return;
 
+    const cells = Array.from(counter.children) as HTMLElement[];
     const hide = (el: HTMLElement) => (el.style.visibility = 'hidden');
     const show = (el: HTMLElement) => (el.style.visibility = 'visible');
+    // Digits go into fixed-width cells, so the running number never jiggles.
+    const setDigits = (value: number) => {
+      const text = String(Math.min(9999, Math.max(0, Math.floor(value))));
+      cells.forEach((cell, i) => {
+        const digit = text[i - (DIGIT_CELLS - text.length)] ?? '';
+        cell.textContent = digit;
+        cell.style.display = digit ? '' : 'none';
+      });
+      counter.dataset.value = text;
+    };
 
     const engine = new PvtEngine(
       configFor(mode),
       {
         showStimulus: () => {
           hide(message);
-          counter.textContent = '0';
+          setDigits(0);
           show(counter);
         },
-        renderCounter: (ms) => {
-          counter.textContent = String(Math.floor(ms));
-        },
-        showResult: (rt) => {
-          counter.textContent = String(Math.round(rt));
-        },
+        renderCounter: (ms) => setDigits(ms),
+        showResult: (rt) => setDigits(Math.round(rt)),
         showMessage: (kind) => {
           hide(counter);
           message.textContent = kind === 'too_early' ? m.test.tooEarly : m.test.miss;
@@ -229,7 +254,8 @@ export function TestPage() {
       browserClock,
       {
         seed: randomSeed(),
-        practiceStimuli: practice,
+        // Rule 9: practice stimuli only the very first time on this device.
+        practiceStimuli: readPref('warmedUp') === '1' ? 0 : PRACTICE_STIMULI,
         frameMs: frameMsRef.current,
         onEnd: (r) => void handleEnd(r),
       },
@@ -260,10 +286,10 @@ export function TestPage() {
 
   function stopTest() {
     setExitOpen(false);
-    engineRef.current?.abort(); // → handleEnd saves it as interrupted (daily) and leaves
+    engineRef.current?.abort();
   }
 
-  // Rule 7: hiding the tab ends the session; it is kept but does not count.
+  // Rule 7: hiding the tab ends the session; it does not count.
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') engineRef.current?.markHidden();
@@ -277,9 +303,10 @@ export function TestPage() {
     const onKey = (e: KeyboardEvent) => {
       if (exitVisible || e.repeat) return;
       if (e.key === ' ' || e.key === 'Enter') {
+        if (shownStage !== 'ready' && stage !== 'running') return;
         e.preventDefault();
-        if (stage === 'ready') begin('mouse');
-        else if (stage === 'running') {
+        if (shownStage === 'ready') begin('mouse');
+        else {
           inputTypeRef.current = 'mouse';
           engineRef.current?.respond(e.timeStamp);
         }
@@ -294,7 +321,7 @@ export function TestPage() {
 
   function onPointerDown(e: React.PointerEvent) {
     if (exitVisible) return;
-    if (stage === 'ready') {
+    if (shownStage === 'ready') {
       begin(e.pointerType);
       return;
     }
@@ -316,23 +343,25 @@ export function TestPage() {
     setExitOpen(true);
   }
 
-  if (stage === 'result' && result) {
+  if (needsProfile) return <Navigate to="/onboarding" replace />;
+
+  if (stage === 'result' && outcome) {
     return (
-      <ResultView
-        mode={mode}
-        validity={result.validity}
-        metrics={result.metrics}
+      <ResultScreen
+        validity={outcome.validity}
+        metrics={outcome.metrics}
+        challenge={challenge}
+        personal={outcome.personal}
+        unsavedSession={!outcome.saved && outcome.validity.ok ? outcome.session : null}
+        onSave={saveFirstResult}
         onAgain={() => {
           engineRef.current = null;
-          setResult(null);
+          setOutcome(null);
           setStage('ready');
         }}
       />
     );
   }
-
-  const modeLabel =
-    mode === 'daily' ? m.test.modeDaily : mode === 'quick' ? m.test.modeQuick : m.test.modeDemo;
 
   return (
     <main
@@ -342,7 +371,7 @@ export function TestPage() {
       onPointerUp={() => (swipeRef.current = null)}
       onPointerCancel={() => (swipeRef.current = null)}
       onContextMenu={(e) => e.preventDefault()}
-      data-stage={stage}
+      data-stage={shownStage}
     >
       <p
         ref={practiceRef}
@@ -350,9 +379,9 @@ export function TestPage() {
         className="kicker absolute inset-x-0 top-[calc(env(safe-area-inset-top)+24px)] text-center"
       />
 
-      {stage === 'ready' && (
+      {shownStage === 'ready' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
-          <p className="kicker mb-6">{modeLabel}</p>
+          <p className="kicker mb-6">{m.test.mode}</p>
           <p className="text-20 text-stimulus-muted">{m.test.start}</p>
           <p className="mt-3 text-14 text-stimulus-muted">{m.test.hint}</p>
         </div>
@@ -387,7 +416,7 @@ export function TestPage() {
               }
             />
           </svg>
-          <span className="absolute font-mono text-40 text-stimulus-muted">{count}</span>
+          <span className="absolute font-display text-40 text-stimulus-muted">{count}</span>
         </div>
       )}
 
@@ -396,9 +425,13 @@ export function TestPage() {
         <span
           ref={counterRef}
           style={{ visibility: 'hidden' }}
-          className="col-start-1 row-start-1 font-mono text-96 font-medium text-stimulus"
+          className="digits col-start-1 row-start-1 font-display text-96 font-semibold text-stimulus"
           data-testid="counter"
-        />
+        >
+          {Array.from({ length: DIGIT_CELLS }, (_, i) => (
+            <span key={i} />
+          ))}
+        </span>
         <span
           ref={messageRef}
           style={{ visibility: 'hidden' }}
@@ -407,7 +440,7 @@ export function TestPage() {
         />
       </div>
 
-      {stage === 'ready' && (
+      {shownStage === 'ready' && (
         <p className="kicker absolute inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+40px)] text-center">
           <span className="pointer-fine:hidden">{m.test.swipeHint}</span>
           <span className="hidden pointer-fine:inline">{m.test.keyboardHint}</span>

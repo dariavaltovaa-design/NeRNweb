@@ -2,14 +2,10 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router';
 
-// Cormorant: editorial headlines and the Form number (Cyrillic + Latin, light roman and italic).
-// JetBrains Mono: the test counter (digits only → Latin).
-// Browsers download these files only when a character actually needs them.
+// Two families only: Cormorant (upright, light) for big headings, Fixel for everything else.
+// No italics: Cyrillic italic letters (т, д, и, п) read like Latin ones in a UI.
 import '@fontsource/cormorant/cyrillic-300.css';
 import '@fontsource/cormorant/latin-300.css';
-import '@fontsource/cormorant/cyrillic-300-italic.css';
-import '@fontsource/cormorant/latin-300-italic.css';
-import '@fontsource/jetbrains-mono/latin-500.css';
 import './index.css';
 
 import './app/install';

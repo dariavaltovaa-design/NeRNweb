@@ -25,8 +25,12 @@ export function validResponseCount(trials: readonly Trial[]): number {
 export function computeMetrics(trials: readonly Trial[]): SessionMetrics | undefined {
   const rts = responseTimes(trials);
   if (rts.length === 0) return undefined;
+  const reactions = trials.flatMap((t) =>
+    (t.kind === 'valid' || t.kind === 'lapse') && t.rtMs !== null ? [t.rtMs] : [],
+  );
   return {
     medianRtMs: Math.round(median(rts)),
+    ...(reactions.length > 0 ? { meanRtMs: Math.round(mean(reactions)) } : {}),
     // S = mean(1000 / RT), unit 1/s. The main metric: the most sensitive to lost sleep.
     meanSpeed: mean(rts.map((rt) => 1000 / rt)),
     lapses: rts.filter((rt) => rt >= LAPSE_MS).length,

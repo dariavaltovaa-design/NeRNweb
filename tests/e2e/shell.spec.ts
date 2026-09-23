@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { watch } from './helpers';
+import { mockPulse, watch } from './helpers';
+
+test.beforeEach(async ({ page }) => {
+  await mockPulse(page);
+});
 
 const ROUTES = [
   '/',

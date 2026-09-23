@@ -10,8 +10,8 @@ const BASE =
   'disabled:pointer-events-none disabled:opacity-40';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-cta text-on-cta',
-  secondary: 'text-text ring-1 ring-hairline ring-inset hover:bg-surface',
+  primary: 'bg-cta px-6 text-on-cta',
+  secondary: 'px-6 text-text ring-1 ring-hairline ring-inset hover:bg-surface',
   quiet:
     'px-0 text-text underline decoration-hairline underline-offset-[6px] hover:decoration-text',
 };

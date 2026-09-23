@@ -1,155 +1,111 @@
-import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useAppData, useNow } from '../../app/data';
-import { readPref, writePref } from '../../app/preferences';
+import { isStandalone } from '../../app/install';
+import { usePulse } from '../../app/pulse';
+import type { Experiment } from '../../db/schema';
 import { fill } from '../../i18n/format';
 import { useI18n } from '../../i18n/I18nProvider';
-import { pickCaption, type CaptionState } from '../../stats/caption';
+import type { Messages } from '../../i18n/messages';
 import { addDays, localDateOf } from '../../stats/dates';
 import { conditionOn, dayIndex, isFinished, isInWindow } from '../../stats/experiment';
-import { evaluateForm, MIN_SESSIONS_FOR_RANGE, type FormResult } from '../../stats/form';
+import { wordFor } from '../../stats/norms';
+import { meanRtOf, scored, streak, usualRt } from '../../stats/personal';
 import { ButtonLink } from '../../ui/Button';
-import { FormRing, type RingState } from '../../ui/FormRing';
 import { PageHeader, Stat } from '../../ui/Heading';
 import { ArrowRight } from '../../ui/icons';
-import { formatHour } from '../onboarding/OnboardingPage';
+import { CountUp } from '../../ui/Motion';
 import { experimentTexts } from '../experiments/templates';
-import { invalidTitle } from '../test/ResultView';
+import { formatHour } from '../onboarding/OnboardingPage';
+import { InstallGuide } from '../settings/InstallGuide';
+import { invalidTitle } from '../test/ResultScreen';
 import { CheckIn, conditionQuestionFor } from './CheckIn';
-
-const POSITION_DOT = { above: 'bg-accent', within: 'bg-band', below: 'bg-below' } as const;
 
 export function TodayPage() {
   const { m, plural, formatDate } = useI18n();
   const data = useAppData();
   const now = useNow();
+  const pulse = usePulse();
   const today = localDateOf(now);
-
-  // The ring fills once a day; after that it just shows the number.
-  const [animateRing] = useState(() => readPref('ringDay') !== today);
-  useEffect(() => {
-    if (animateRing) writePref('ringDay', today);
-  }, [animateRing, today]);
+  const hour = new Date(now).getHours();
 
   if (!data) return null;
   const { profile, sessions, experiments } = data;
 
   const daily = sessions.filter((s) => s.mode === 'daily');
   const todays = daily.filter((s) => s.localDate === today);
-  const latestValid = [...todays].reverse().find((s) => s.validity.ok && s.metrics);
+  const latestValid = scored(todays).at(-1);
   const latest = todays.at(-1);
-  const form: FormResult | null = latestValid ? evaluateForm(sessions, latestValid) : null;
   const yesterday = addDays(today, -1);
   const missedYesterday =
     !latest &&
     daily.some((s) => s.localDate < yesterday) &&
     !daily.some((s) => s.localDate === yesterday);
   const experiment = experiments.find((e) => e.status === 'running');
-  const hour = new Date(now).getHours();
+  const usual = usualRt(sessions, today);
+  const days = streak(sessions, today);
+  const uaHour = pulse?.ua.hours[hour]?.meanRtMs ?? null;
   const outsideWindow = !latestValid && !isInWindow(hour, profile?.preferredWindow);
   const usualTime = profile?.preferredWindow
     ? formatHour((profile.preferredWindow.startHour + 2) % 24)
     : '';
 
-  // ── Ring ────────────────────────────────────────────────────────────────
-  let ring: RingState = { kind: 'empty' };
-  let ringLabel = m.today.ringAriaEmpty;
-  let captionState: CaptionState | null = null;
-  if (form?.kind === 'calibration') {
-    ring = form;
-    ringLabel = fill(m.today.ringAriaCalibration, form);
-    captionState = 'calibration';
-  } else if (form?.kind === 'form') {
-    ring = { kind: 'form', value: form.value, range: form.range, newPeak: form.newPeak };
-    ringLabel = form.position
-      ? fill(m.today.ringAria, {
-          value: form.value,
-          position: m.today.positionShort[form.position],
-        })
-      : fill(m.today.ringAriaNoRange, { value: form.value });
-    captionState = form.newPeak ? 'peak' : (form.position ?? 'early');
-  }
-  if (latestValid?.checkIn?.nightAlert) captionState = 'alert';
-
-  const kicker = formatDate(now, { weekday: 'long', day: 'numeric', month: 'long' });
+  const meanRt = latestValid ? meanRtOf(latestValid) : null;
+  const word = meanRt !== null ? wordFor(meanRt) : null;
 
   return (
     <div className="flex flex-col gap-10">
-      <PageHeader kicker={kicker} title={m.nav.today} />
+      <PageHeader
+        kicker={formatDate(now, { weekday: 'long', day: 'numeric', month: 'long' })}
+        title={m.nav.today}
+      />
 
-      <section className="animate-rise flex flex-col items-center text-center">
-        <FormRing
-          state={ring}
-          label={ringLabel}
-          kicker={form?.kind === 'form' && form.newPeak ? m.today.newPeak : m.today.formLabel}
-          caption={form?.kind === 'form' ? m.today.ofHundred : undefined}
-          animate={animateRing && ring.kind !== 'empty'}
-        />
-
-        {form?.kind === 'form' && form.position && (
-          <p className="mt-2 flex items-center gap-2 text-16" data-testid="position">
-            <span
-              aria-hidden="true"
-              className={`size-2 rounded-full ${POSITION_DOT[form.position]}`}
-            />
-            {m.today.position[form.position]}
+      {meanRt !== null && word ? (
+        <section className="animate-rise" data-testid="today-result">
+          <p className="serif-caps text-word break-words">{m.words[word]}</p>
+          <p className="mt-4 flex items-baseline gap-3">
+            <CountUp to={meanRt} className="font-display text-56 leading-none font-semibold" />
+            <span className="text-16 text-muted">
+              {m.common.ms} · {m.result.meanLabel}
+            </span>
           </p>
-        )}
-        {form?.kind === 'form' && !form.position && (
-          <p className="mt-2 text-14 text-muted">
-            {fill(m.today.rangePending, {
-              n: plural(MIN_SESSIONS_FOR_RANGE - form.poolSize, m.units.sessions),
-            })}
-          </p>
-        )}
-        {form?.kind === 'calibration' && (
-          <p className="mt-2 max-w-[32ch] text-14 text-muted">
-            {fill(m.today.calibration, form)}. {m.today.calibrationText}
-          </p>
-        )}
-
-        {captionState && (
-          <p className="serif-italic mt-6 max-w-[30ch] text-28 text-balance">
-            {pickCaption(m.captions[captionState], today)}
-          </p>
-        )}
-
-        {latestValid?.metrics && (
-          <div className="mt-8 grid w-full grid-cols-3 gap-4 border-y border-hairline py-5 text-left">
-            <Stat
-              label={m.today.typical}
-              value={latestValid.metrics.medianRtMs}
-              unit={m.common.ms}
-            />
-            <Stat label={m.today.slow} value={latestValid.metrics.lapses} />
-            <Stat label={m.today.early} value={latestValid.metrics.falseStarts} />
-          </div>
-        )}
-
-        {!latestValid && (
-          <div className="mt-6 flex w-full flex-col items-center gap-4">
-            {latest && !latest.validity.ok ? (
-              <>
-                <p className="text-16">{invalidTitle(latest.validity, m)}</p>
-                <p className="text-14 text-muted">
-                  {latest.validity.reasons.map((r) => m.result.reasons[r]).join(' ')}
-                </p>
-              </>
-            ) : (
-              <p className="text-16 text-muted">{m.today.noTest}</p>
-            )}
-            {missedYesterday && <p className="text-14 text-muted">{m.today.missedYesterday}</p>}
-            {outsideWindow && usualTime && (
-              <p className="max-w-[34ch] text-14 text-muted">
-                {fill(m.today.outsideWindow, { time: usualTime })}
+          <p className="mt-3 text-16 text-muted">{m.wordLines[word]}</p>
+        </section>
+      ) : (
+        <section className="animate-rise flex flex-col gap-4">
+          {latest && !latest.validity.ok ? (
+            <>
+              <p className="text-18">{invalidTitle(latest.validity, m)}</p>
+              <p className="text-14 text-muted">
+                {latest.validity.reasons.map((r) => m.result.reasons[r]).join(' ')}
               </p>
-            )}
-            <ButtonLink to="/test?mode=daily" wide arrow>
-              {latest ? m.today.retry : m.today.startTest}
-            </ButtonLink>
-          </div>
-        )}
-      </section>
+            </>
+          ) : (
+            <p className="text-18 text-muted">{m.today.noTest}</p>
+          )}
+          {missedYesterday && <p className="text-14 text-muted">{m.today.missedYesterday}</p>}
+          {outsideWindow && usualTime && (
+            <p className="text-14 text-muted">{fill(m.today.outsideWindow, { time: usualTime })}</p>
+          )}
+          <ButtonLink to="/test" wide arrow>
+            {latest ? m.today.retry : m.today.start}
+          </ButtonLink>
+        </section>
+      )}
+
+      <div className="grid grid-cols-3 gap-4 border-y border-hairline py-5">
+        <Stat label={m.today.streakLabel} value={days > 0 ? plural(days, m.units.days) : '—'} />
+        <Stat
+          label={m.today.usualLabel}
+          value={usual ?? '—'}
+          unit={usual ? m.common.ms : undefined}
+        />
+        <Stat
+          label={m.today.uaLabel}
+          value={uaHour ?? '—'}
+          unit={uaHour ? m.common.ms : undefined}
+        />
+      </div>
+      {usual === null && <p className="-mt-6 text-14 text-muted">{m.today.usualPending}</p>}
 
       {experiment && <ExperimentCard experiment={experiment} today={today} m={m} />}
 
@@ -165,8 +121,19 @@ export function TodayPage() {
         />
       )}
 
+      {!isStandalone() && (
+        <section className="rounded-card bg-surface p-5 ring-1 ring-hairline ring-inset">
+          <h2 className="font-display text-16 font-semibold tracking-[0.04em] uppercase">
+            {m.install.title}
+          </h2>
+          <p className="mt-2 mb-5 text-14 text-muted">{m.install.text}</p>
+          <InstallGuide />
+        </section>
+      )}
+
       <Link
         to="/scroll"
+
         className="group flex items-center justify-between gap-4 border-t border-hairline pt-6"
       >
         <span>
@@ -186,9 +153,9 @@ function ExperimentCard({
   today,
   m,
 }: {
-  experiment: NonNullable<ReturnType<typeof useAppData>>['experiments'][number];
+  experiment: Experiment;
   today: string;
-  m: ReturnType<typeof useI18n>['m'];
+  m: Messages;
 }) {
   const texts = experimentTexts(experiment, m);
   const now = conditionOn(experiment, today);
@@ -198,6 +165,7 @@ function ExperimentCard({
   return (
     <Link
       to="/experiments"
+
       className="group block rounded-card bg-surface p-5 ring-1 ring-hairline ring-inset"
     >
       <p className="kicker text-muted">

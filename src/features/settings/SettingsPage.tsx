@@ -6,7 +6,9 @@ import type { Profile } from '../../db/schema';
 import { fill, type Locale } from '../../i18n/format';
 import { useI18n } from '../../i18n/I18nProvider';
 import { ButtonLink } from '../../ui/Button';
-import { Stepper } from '../../ui/Controls';
+import { Stepper, Toggle } from '../../ui/Controls';
+import { isContributing, setContributing } from '../../app/pulse';
+import { useState } from 'react';
 import { Kicker, PageHeader } from '../../ui/Heading';
 import { ArrowRight } from '../../ui/icons';
 import { Segmented } from '../../ui/Segmented';
@@ -17,6 +19,7 @@ export function SettingsPage() {
   const { m, locale, setLocale } = useI18n();
   const [theme, setTheme] = useThemePreference();
   const profile = useProfile();
+  const [pulseOn, setPulseOn] = useState(isContributing);
   const updateProfile = (patch: Partial<Omit<Profile, 'id'>>) =>
     import('../../db/repo').then((repo) => repo.updateProfile(patch));
   const usualHour = profile?.preferredWindow ? (profile.preferredWindow.startHour + 2) % 24 : 8;
@@ -29,7 +32,6 @@ export function SettingsPage() {
   const links = [
     { to: '/privacy', label: m.settings.privacy },
     ...(profile ? [{ to: '/scroll', label: m.settings.scroll }] : []),
-    { to: '/test?mode=demo', label: m.settings.demo },
   ];
 
   return (
@@ -60,6 +62,20 @@ export function SettingsPage() {
           ]}
         />
         <p className="mt-2 text-14 text-muted">{m.settings.themeNote}</p>
+      </div>
+
+      <div>
+        <div className="border-y border-hairline py-1">
+          <Toggle
+            label={m.settings.pulse}
+            checked={pulseOn}
+            onChange={(on) => {
+              setContributing(on);
+              setPulseOn(on);
+            }}
+          />
+        </div>
+        <p className="mt-2 text-14 text-muted">{m.settings.pulseNote}</p>
       </div>
 
       {profile ? (

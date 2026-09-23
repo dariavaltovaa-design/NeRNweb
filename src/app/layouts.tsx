@@ -35,7 +35,7 @@ export function AppShell() {
   ];
 
   return (
-    <div className={`min-h-dvh ${tint}`}>
+    <div className={`min-h-dvh overflow-x-clip ${tint}`}>
       <main className="mx-auto max-w-[480px] px-5 pt-[calc(env(safe-area-inset-top)+28px)] pb-[calc(env(safe-area-inset-bottom)+104px)]">
         <Outlet />
       </main>

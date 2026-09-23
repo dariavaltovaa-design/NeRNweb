@@ -25,14 +25,13 @@
   --color-scrim: var(--scrim);
 
   --font-*: initial;
-  /* Fixel — interface and numbers. Cormorant — editorial headlines and the Form number. */
+  /* Fixel — interface and numbers. Cormorant (upright only) — big headings. */
   /* After Fixel — the system font (SF Pro on Apple devices). Never bundled: Apple's licence forbids it. */
   --font-sans: 'Fixel Text', -apple-system, system-ui, sans-serif;
   --font-display: 'Fixel Display', 'Fixel Text', -apple-system, system-ui, sans-serif;
   --font-serif: 'Cormorant', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
 
-  /* Type scale: 11 / 12 / 14 / 16 / 18 / 20 / 28 / 40 / 56 / 72 / 96 px */
+  /* Type scale: 11 / 12 / 14 / 16 / 18 / 20 / 28 / 40 / 56 / 72 / 96 / 128 px */
   --text-*: initial;
   --text-11: 11px;
   --text-11--line-height: 14px;
@@ -56,6 +55,8 @@
   --text-72--line-height: 70px;
   --text-96: 96px;
   --text-96--line-height: 90px;
+  --text-128: 128px;
+  --text-128--line-height: 116px;
 
   --radius-*: initial;
   --radius-card: 20px;
@@ -77,26 +78,28 @@
   text-transform: uppercase;
 }
 
-/* Editorial serif headline: light roman capitals with italic lowercase accents. */
+/* Big heading: light roman capitals. The accent word differs by colour, never by italics. */
 @utility serif-caps {
   font-family: var(--font-serif);
   font-weight: 300;
+  font-style: normal;
   text-transform: uppercase;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
   font-feature-settings: 'lnum';
+  font-synthesis: none;
 }
 
-@utility serif-italic {
-  font-family: var(--font-serif);
-  font-weight: 300;
-  font-style: italic;
-  font-feature-settings: 'lnum';
-}
-
-/* Fluid display size for the landing headline: from 40px on phones to 96px on desktops. */
+/* Fluid display size for the landing headline: from 38px on phones to 88px on desktops.
+   10.6vw keeps "НАСКІЛЬКИ ТИ" on one line of a 360 px phone. */
 @utility text-hero {
-  font-size: clamp(40px, 11.5vw, 96px);
-  line-height: 0.98;
+  font-size: clamp(38px, 10.6vw, 88px);
+  line-height: 0.92;
+}
+
+/* The result word: as big as the screen allows. */
+@utility text-word {
+  font-size: clamp(40px, 12.5vw, 168px);
+  line-height: 0.9;
 }
 
 @utility text-wordmark {
@@ -179,6 +182,67 @@
 
 @utility animate-rise {
   animation: rise 240ms var(--ease-out) both;
+}
+
+/* Scroll reveal: elements with data-reveal rise into place once they enter the screen. */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 700ms var(--ease-out),
+    transform 900ms var(--ease-out);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+[data-reveal='shown'] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Headline lines slide up from behind a mask, one after another. */
+@keyframes line-up {
+  from {
+    transform: translateY(105%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@utility animate-line {
+  animation: line-up 900ms var(--ease-out) both;
+  animation-delay: var(--line-delay, 0ms);
+}
+
+/* Lumen-style running strip of words. */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@utility animate-marquee {
+  animation: marquee 38s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Digits in fixed-width cells: Fixel's figures are proportional, so a running number would jiggle. */
+@utility digits {
+  display: inline-flex;
+  & > span {
+    display: inline-block;
+    width: 0.64em;
+    text-align: center;
+  }
 }
 
 /* Test countdown: the circle closes over one second. */

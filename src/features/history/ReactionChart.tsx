@@ -4,18 +4,19 @@ import { daysBetween } from '../../stats/dates';
 
 export interface ChartPoint {
   date: string;
+  /** Mean reaction time, ms. Lower is faster, so the axis is flipped: faster sits higher. */
   value: number;
   session: Session;
 }
 
 const W = 340;
-const PAD = { left: 30, right: 10, top: 14, bottom: 24 };
+const PAD = { left: 34, right: 10, top: 14, bottom: 24 };
 
 /**
- * Form over 60 days (SPEC «Екран 5»): dots per session, a hatched band for the usual range,
+ * Reaction over 60 days: a dot per test, a hatched band for the usual range,
  * A/B markers (A — hollow, B — filled with the accent). Pure SVG, no chart library.
  */
-export function FormChart({
+export function ReactionChart({
   points,
   range,
   startDate,
@@ -42,13 +43,15 @@ export function FormChart({
   const svgRef = useRef<SVGSVGElement>(null);
   const H = height;
   const span = Math.max(1, daysBetween(startDate, endDate));
-  const minValue = Math.min(...points.map((p) => p.value), range?.low ?? 100);
-  const floor = Math.max(0, Math.min(60, Math.floor((minValue - 5) / 10) * 10));
+  const values = points.map((p) => p.value).concat(range ? [range.low, range.high] : []);
+  const fastest = Math.floor((Math.min(...values) - 20) / 50) * 50;
+  const slowest = Math.ceil((Math.max(...values) + 20) / 50) * 50;
 
   const x = (date: string) =>
     PAD.left + (daysBetween(startDate, date) / span) * (W - PAD.left - PAD.right);
-  const y = (value: number) =>
-    PAD.top + (1 - (value - floor) / (100 - floor)) * (H - PAD.top - PAD.bottom);
+  // Faster (smaller ms) at the top.
+  const y = (ms: number) =>
+    PAD.top + ((ms - fastest) / Math.max(1, slowest - fastest)) * (H - PAD.top - PAD.bottom);
 
   function pick(clientX: number) {
     const svg = svgRef.current;
@@ -64,6 +67,7 @@ export function FormChart({
 
   const line = points.map((p) => `${x(p.date).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
   const current = selected !== null && selected !== undefined ? points[selected] : undefined;
+  const grid = [fastest, Math.round((fastest + slowest) / 2), slowest];
 
   return (
     <svg
@@ -101,8 +105,7 @@ export function FormChart({
         </pattern>
       </defs>
 
-      {/* Grid: floor, middle, 100 */}
-      {[floor, (floor + 100) / 2, 100].map((v) => (
+      {grid.map((v) => (
         <g key={v}>
           <line
             x1={PAD.left}
@@ -112,7 +115,7 @@ export function FormChart({
             stroke="var(--hairline)"
             strokeDasharray="2 4"
           />
-          <text x={PAD.left - 8} y={y(v) + 3.5} textAnchor="end" fontSize="10" fill="var(--muted)">
+          <text x={PAD.left - 6} y={y(v) + 3.5} textAnchor="end" fontSize="10" fill="var(--muted)">
             {v}
           </text>
         </g>
@@ -122,8 +125,8 @@ export function FormChart({
         <rect
           x={PAD.left}
           width={W - PAD.left - PAD.right}
-          y={y(range.high)}
-          height={Math.max(1, y(range.low) - y(range.high))}
+          y={y(range.low)}
+          height={Math.max(1, y(range.high) - y(range.low))}
           fill={`url(#${hatchId})`}
         />
       )}
@@ -146,8 +149,7 @@ export function FormChart({
       {points.map((p, i) => {
         const cx = x(p.date);
         const cy = y(p.value);
-        const isSelected = i === selected;
-        const r = isSelected ? 5.5 : 3.5;
+        const r = i === selected ? 5.5 : 3.5;
         if (p.session.condition === 'A')
           return (
             <circle
@@ -162,9 +164,7 @@ export function FormChart({
           );
         if (p.session.condition === 'B')
           return <circle key={p.session.id} cx={cx} cy={cy} r={r} fill="var(--accent)" />;
-        return (
-          <circle key={p.session.id} cx={cx} cy={cy} r={isSelected ? 5 : 3} fill="var(--text)" />
-        );
+        return <circle key={p.session.id} cx={cx} cy={cy} r={r - 0.5} fill="var(--text)" />;
       })}
 
       <text x={PAD.left} y={H - 6} fontSize="10" fill="var(--muted)">

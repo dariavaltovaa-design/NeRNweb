@@ -5,7 +5,9 @@
 const KEYS = {
   locale: 'nern.locale',
   theme: 'nern.theme',
-  ringDay: 'nern.ringDay', // the day the Form ring last played its fill animation
+  pulse: 'nern.pulse', // 'off' = do not add my results to the anonymous average
+  warmedUp: 'nern.warmedUp', // '1' after the first test: practice stimuli only the very first time
+  challengeName: 'nern.name', // optional first name shown in challenges the person sends
 } as const;
 
 type PrefKey = keyof typeof KEYS;

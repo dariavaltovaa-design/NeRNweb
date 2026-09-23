@@ -31,7 +31,7 @@ export function ScrollPage() {
       <section className="rounded-card bg-surface p-5 ring-1 ring-hairline ring-inset">
         {pending ? (
           <>
-            <p className="serif-italic text-28">{m.scroll.waiting}</p>
+            <p className="font-display text-20 font-semibold">{m.scroll.waiting}</p>
             <div className="mt-6 flex flex-col gap-3">
               <ButtonLink to={`/test?mode=quick&pair=${pending.id}&phase=after`} wide arrow>
                 {m.scroll.after}
@@ -49,7 +49,7 @@ export function ScrollPage() {
       </section>
 
       <section>
-        <p className="serif-italic text-28" data-testid="scroll-average">
+        <p className="font-display text-20 font-semibold" data-testid="scroll-average">
           {average === null
             ? fill(m.scroll.averagePending, { n: complete })
             : fill(m.scroll.average, { x: pct(average) })}

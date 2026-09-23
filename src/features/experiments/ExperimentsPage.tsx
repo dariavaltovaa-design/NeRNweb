@@ -60,7 +60,9 @@ export function ExperimentsPage() {
                       onClick={() => setSetup({ kind: 'template', id: t.id, timing: t.timing })}
                       className="group grid w-full grid-cols-[40px_1fr_auto] items-start gap-3 border-t border-hairline py-5 text-left"
                     >
-                      <span className="serif-italic text-20 text-accent">0{i + 1}</span>
+                      <span className="font-display text-18 font-semibold text-accent">
+                        0{i + 1}
+                      </span>
                       <span>
                         <span className="block font-display text-16 font-semibold tracking-[0.04em] uppercase">
                           {texts.title}
@@ -225,7 +227,9 @@ function ActiveExperiment({
       </div>
 
       <div data-testid="verdict">
-        <p className="serif-italic text-28 text-balance">{verdictText(v, m, plural)}</p>
+        <p className="font-display text-20 font-semibold text-balance">
+          {verdictText(v, m, plural)}
+        </p>
         {v.kind !== 'not_enough' && (
           <div className="mt-5">
             <VerdictScale

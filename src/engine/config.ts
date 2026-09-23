@@ -28,7 +28,8 @@ export interface PvtConfig {
 const BASE = { isiMinMs: 1000, isiMaxMs: 4000, feedbackMs: 1000, timeoutMs: 10_000 };
 
 const CONFIGS: Record<TestMode, PvtConfig> = {
-  daily: { ...BASE, durationMs: 90_000, minValidResponses: 15, checkFrames: true },
+  // Decision 2026-09-24: one 60-second test for everyone (was 90 s daily) — a shorter hook.
+  daily: { ...BASE, durationMs: 60_000, minValidResponses: 10, checkFrames: true },
   quick: { ...BASE, durationMs: 60_000, minValidResponses: 10, checkFrames: true },
   demo: { ...BASE, durationMs: 60_000, minValidResponses: 10, checkFrames: true },
 };

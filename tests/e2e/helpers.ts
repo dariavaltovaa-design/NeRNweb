@@ -18,6 +18,30 @@ export function watch(page: Page) {
 }
 
 /**
+ * The anonymous average lives in a Netlify function, which `vite preview` doesn't run.
+ * Tests answer for it: `n` results of `ms` at every hour of the day.
+ */
+export async function mockPulse(page: Page, { n = 0, ms = 350 } = {}) {
+  const posts: unknown[] = [];
+  await page.route('**/.netlify/functions/pulse', async (route) => {
+    if (route.request().method() === 'POST') {
+      posts.push(route.request().postDataJSON());
+      await route.fulfill({ status: 204 });
+      return;
+    }
+    const shown = n >= 20 ? ms : null;
+    const scope = {
+      n,
+      meanRtMs: shown,
+      hours: Array.from({ length: 24 }, () => ({ n, meanRtMs: shown })),
+      bins: n >= 20 ? Array.from({ length: 56 }, (_, i) => (i === 10 ? n : 0)) : [],
+    };
+    await route.fulfill({ json: { ua: scope, all: scope } });
+  });
+  return posts;
+}
+
+/**
  * Takes the whole attention test like a person: tap to start, then tap 150 ms after each stimulus.
  * The "finger" runs inside the page, so a slow CI machine cannot make it late.
  */
@@ -39,18 +63,18 @@ export async function takeTest(page: Page) {
     }).observe(counter, { attributes: true, attributeFilter: ['style'] });
   });
   await main.click({ position: { x: 150, y: 300 } });
-  // Countdown 3 s + practice + the timed part, then the app leaves the test screen.
+  // Countdown 3 s + warm-up + the timed part, then the app leaves the test screen.
   await expect(
     page.locator('main[data-stage="running"], main[data-stage="countdown"]'),
   ).toHaveCount(0, { timeout: 45_000 });
 }
 
-/** Goes through onboarding (18+, how it works, usual time) and lands on the first test. */
-export async function onboard(page: Page) {
-  await page.goto('/onboarding');
+/** A first test, then "keep my results" (18+) on the result screen → Today. */
+export async function firstTestAndSave(page: Page) {
+  await page.goto('/test');
+  await takeTest(page);
+  await expect(page.getByTestId('word')).toBeVisible();
   await page.getByRole('checkbox').check();
-  await page.getByRole('button', { name: 'Далі' }).click();
-  await page.getByRole('button', { name: 'Далі' }).click();
-  await page.getByRole('button', { name: 'Почати перший тест' }).click();
-  await expect(page).toHaveURL(/\/test\?mode=daily/);
+  await page.getByRole('button', { name: 'Почати' }).click();
+  await expect(page).toHaveURL(/\/today$/);
 }
