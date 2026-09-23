@@ -36,9 +36,9 @@ const CONFIGS: Record<TestMode, PvtConfig> = {
 // Only in the e2e build (npm run build:e2e): the same rules on a compressed clock,
 // so automated tests do not wait 90 seconds. Never present in the production bundle.
 const FAST: Partial<PvtConfig> = {
-  durationMs: 4000,
-  isiMinMs: 400,
-  isiMaxMs: 700,
+  durationMs: 5000,
+  isiMinMs: 500,
+  isiMaxMs: 800,
   feedbackMs: 300,
   timeoutMs: 2000,
   minValidResponses: 3,

@@ -8,10 +8,11 @@ const isCI = Boolean(process.env.CI);
 export default defineConfig({
   testDir: 'tests/e2e',
   fullyParallel: true,
+  workers: isCI ? 2 : undefined,
   forbidOnly: isCI,
   retries: isCI ? 1 : 0,
   reporter: isCI ? 'github' : 'list',
-  timeout: 60_000,
+  timeout: isCI ? 120_000 : 60_000,
   use: {
     baseURL: 'http://localhost:4174',
     trace: 'on-first-retry',

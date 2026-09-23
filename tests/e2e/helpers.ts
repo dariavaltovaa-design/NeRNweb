@@ -18,29 +18,31 @@ export function watch(page: Page) {
 }
 
 /**
- * Takes the whole attention test like a person: tap to start, then tap ~150 ms after each
- * stimulus appears, until the test screen goes away.
+ * Takes the whole attention test like a person: tap to start, then tap 150 ms after each stimulus.
+ * The "finger" runs inside the page, so a slow CI machine cannot make it late.
  */
 export async function takeTest(page: Page) {
   const main = page.locator('main[data-stage]');
   await expect(main).toHaveAttribute('data-stage', 'ready');
+  await page.evaluate(() => {
+    const surface = document.querySelector('main[data-stage]');
+    const counter = document.querySelector<HTMLElement>('[data-testid="counter"]');
+    if (!surface || !counter) throw new Error('test screen not found');
+    // The engine makes the counter visible exactly when a stimulus appears.
+    new MutationObserver(() => {
+      if (counter.style.visibility !== 'visible' || counter.textContent !== '0') return;
+      window.setTimeout(() => {
+        surface.dispatchEvent(
+          new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', clientY: 300 }),
+        );
+      }, 150);
+    }).observe(counter, { attributes: true, attributeFilter: ['style'] });
+  });
   await main.click({ position: { x: 150, y: 300 } });
-
-  const counter = page.getByTestId('counter');
-  for (let i = 0; i < 60; i++) {
-    // The test screen is gone once the session is saved and the app moves on.
-    if ((await main.count()) === 0) break;
-    const stage = await main.getAttribute('data-stage', { timeout: 1000 }).catch(() => null);
-    if (stage === null || stage === 'saving' || stage === 'result') break;
-    const shown = await counter
-      .waitFor({ state: 'visible', timeout: 2500 })
-      .then(() => true)
-      .catch(() => false);
-    if (!shown) continue;
-    await page.waitForTimeout(150);
-    await main.click({ position: { x: 150, y: 300 } }).catch(() => undefined);
-    await counter.waitFor({ state: 'hidden', timeout: 2500 }).catch(() => undefined);
-  }
+  // Countdown 3 s + practice + the timed part, then the app leaves the test screen.
+  await expect(
+    page.locator('main[data-stage="running"], main[data-stage="countdown"]'),
+  ).toHaveCount(0, { timeout: 45_000 });
 }
 
 /** Goes through onboarding (18+, how it works, usual time) and lands on the first test. */
